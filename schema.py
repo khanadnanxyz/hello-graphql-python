@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 import json
 
@@ -5,9 +6,9 @@ import graphene
 
 
 class User(graphene.ObjectType):
-    id = graphene.ID()
+    id = graphene.ID(default_value=str(uuid.uuid4()))
     username = graphene.String()
-    created_at = graphene.DateTime()
+    created_at = graphene.DateTime(default_value=datetime.now())
 
 
 class Query(graphene.ObjectType):
@@ -29,16 +30,33 @@ class Query(graphene.ObjectType):
         return users[:limit]
 
 
+class CreateUsser(graphene.Mutation):
+    user = graphene.Field(User)
+
+    class Arguments:
+        username = graphene.String()
+
+    def mutate(self, info, username):
+        user = User(username=username)
+        return CreateUsser(user=user)
+
+
+class Mutation(graphene.ObjectType):
+    create_user = CreateUsser.Field()
+
+
 # override with auto_camelcase / must follow convention of camelCase
-schema = graphene.Schema(query=Query, auto_camelcase=False)
+schema = graphene.Schema(query=Query, auto_camelcase=False, mutation=Mutation)
 
 result = schema.execute(
     '''
-    {
-        users (limit: 1) {
-            id
-            username
-            created_at
+    mutation {
+        create_user(username: "khan") {
+           user { 
+                id
+                username
+                created_at
+            }
         }
     }
     '''
