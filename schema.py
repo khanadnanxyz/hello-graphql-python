@@ -1,36 +1,43 @@
+import graphene
+import json
 import uuid
 from datetime import datetime
-import json
 
-import graphene
+
+class Post(graphene.ObjectType):
+    title = graphene.String()
+    content = graphene.String()
 
 
 class User(graphene.ObjectType):
     id = graphene.ID(default_value=str(uuid.uuid4()))
     username = graphene.String()
     created_at = graphene.DateTime(default_value=datetime.now())
+    avatar_url = graphene.String()
+
+    def resolve_avatar_url(self, info):
+        return 'https://cdn.url/{}/{}'.format(self.username, self.id)
 
 
 class Query(graphene.ObjectType):
     users = graphene.List(User, limit=graphene.Int())
     hello = graphene.String()
-    is_active = graphene.Boolean()
+    is_admin = graphene.Boolean()
 
     def resolve_hello(self, info):
         return "world"
 
-    def resolve_is_active(self, info):
+    def resolve_is_admin(self, info):
         return True
 
     def resolve_users(self, info, limit=None):
-        users = [
-            User(id=1, username='joker', created_at=datetime.now()),
-            User(id=2, username='heath', created_at=datetime.now())
-        ]
-        return users[:limit]
+        return [
+                   User(id="1", username="Joker", created_at=datetime.now()),
+                   User(id="2", username="Heath", created_at=datetime.now())
+               ][:limit]
 
 
-class CreateUsser(graphene.Mutation):
+class CreateUser(graphene.Mutation):
     user = graphene.Field(User)
 
     class Arguments:
@@ -38,44 +45,62 @@ class CreateUsser(graphene.Mutation):
 
     def mutate(self, info, username):
         user = User(username=username)
-        return CreateUsser(user=user)
+        return CreateUser(user=user)
+
+
+class CreatePost(graphene.Mutation):
+    post = graphene.Field(Post)
+
+    class Arguments:
+        title = graphene.String()
+        content = graphene.String()
+
+    def mutate(self, info, title, content):
+        if info.context.get('is_anonymous'):
+            raise Exception('Not authenticated!')
+        post = Post(title=title, content=content)
+        return CreatePost(post=post)
 
 
 class Mutation(graphene.ObjectType):
-    create_user = CreateUsser.Field()
+    create_user = CreateUser.Field()
+    create_post = CreatePost.Field()
 
 
-# override with auto_camelcase / must follow convention of camelCase
 schema = graphene.Schema(query=Query, auto_camelcase=False, mutation=Mutation)
 
 result = schema.execute(
     '''
-    mutation ($username: String) {
-        create_user(username: $username) {
-           user { 
-                id
-                username
-                created_at
-            }
-        }
+    {
+      users {
+        id
+        created_at
+        username
+        avatar_url
+      }
     }
     ''',
-    variable_values={'username': 'khanshaheb'}
+    # context={'is_anonymous': True}
+    # variable_values={'limit': 1}
 )
 
+
+# passing value through context before mutating
 # result = schema.execute(
 #     '''
-#     query ($limit: Int) {
-#         users(limit: $limit) {
-#                 id
-#                 username
-#                 created_at
+#     mutation{
+#         create_post(title:"hello", content:"world") {
+#            post {
+#                 title
+#                 content
 #             }
+#         }
 #     }
 #     ''',
-#     variable_values={'limit': '1'}
+#     context={'is_anonymous': True}
 # )
 
+print(result)
 dictResult = dict(result.data.items())
 finalResult = json.dumps(dictResult, indent=2)
 print(finalResult)
